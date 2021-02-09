@@ -142,7 +142,9 @@ unsigned int main_hook_pre(void *hooknum, struct sk_buff *skb, const struct nf_h
 			iph->daddr=netlink_message->src_ipv4;
         	
 			update_udp_ip_checksum(skb, udph, iph);
+    	
     		}
+
 	}
     	return NF_ACCEPT;
 
@@ -180,7 +182,7 @@ unsigned int main_hook_post(void *hooknum, struct sk_buff *skb, const struct nf_
 				
 			update_udp_ip_checksum(skb, udph, iph);
 		}
-    }
+         }
 
     return NF_ACCEPT;
 }
@@ -219,13 +221,24 @@ static void lrep_nl_recv_msg(struct sk_buff *skb)
   	int cnt=0;
   	struct netlink_message *netlink_message_s1;
   	struct netlink_message *netlink_message_s2;
-  	struct hlist_node *temp_node;
  	__be16 key_s1=NULL;
   	__be16 key_s2=NULL;
   	char* const delim = " ";
   	char* token;
 	char* cur = (char*)nlmsg_data(nlh);//strtok((char*)nlmsg_data(nlh));
 	int val;
+
+	//RTCP hash declare 
+	struct netlink_message *netlink_message_rtcp1;
+  	struct netlink_message *netlink_message_rtcp2;
+ 	__be16 key_rtcp1=NULL;
+  	__be16 key_rtcp2=NULL;
+   	__be16 rtcp_src_port=NULL;
+  	__be16 rtcp_dst_port=NULL;
+  	__be16 rtcp_snat_port=NULL;
+  	__be16 rtcp_dnat_port=NULL;
+  	
+
 
 	// get message and extract data
 	msg_size=strlen(cur);
@@ -247,23 +260,33 @@ static void lrep_nl_recv_msg(struct sk_buff *skb)
 			{
 				kstrtoint(token, 10, &val);
 				src_port = htons(val);
+				
+				rtcp_src_port = htons(val+1);
 			}
 			if(cnt==7)	
 			{
 				kstrtoint(token, 10, &val);
 				dst_port = htons(val);
 				key_s1 = htons(val);
+				
+				rtcp_dst_port = htons(val+1);
+				key_rtcp1 = htons(val+1);
 			}
 			if(cnt==8)	
 			{
 				kstrtoint(token, 10, &val);
 				snat_port = htons(val);
 				key_s2 = htons(val);
+		
+				rtcp_snat_port = htons(val+1);
+				key_rtcp2 = htons(val+1);
 			}
 			if(cnt==9)
 			{
 				kstrtoint(token, 10, &val);
 				dnat_port = htons(val);
+				
+				rtcp_dnat_port = htons(val+1);
 			}
 			if(cnt==10)
 				timeout = token;
@@ -326,6 +349,64 @@ static void lrep_nl_recv_msg(struct sk_buff *skb)
     		netlink_message_s2->session = session;
    		// Insert To hash_table with key src_port
 		hash_add_rcu(netlink_message_table, &netlink_message_s2->hash_node, key_s2);
+
+
+		// RTCP procedure for allocation & insert in hash table
+		
+		// Free allocated memory with same key_rtcp1 first
+    		hash_for_each_possible(netlink_message_table,netlink_message_rtcp1 , hash_node, key_rtcp1) {
+			free(netlink_message_rtcp1);
+		}
+
+		// Free allocated memory with same key_rtcp2 first
+    		hash_for_each_possible(netlink_message_table,netlink_message_rtcp2 , hash_node, key_rtcp2) {
+			free(netlink_message_rtcp2);
+		}
+	
+
+		netlink_message_rtcp1 = (struct netlink_message*) malloc(sizeof(struct netlink_message));
+    		if (netlink_message_rtcp1 == NULL) {
+      			printk(KERN_ALERT "[CODA] Cannot alloc netlink_message_rtcp1");
+      			return NF_ACCEPT;
+    		}
+	
+    		netlink_message_rtcp2 = (struct netlink_message*) malloc(sizeof(struct netlink_message));
+		if (netlink_message_rtcp2 == NULL) {
+      			printk(KERN_ALERT "[CODA] Cannot alloc netlink_message_rtcp2");
+      			return NF_ACCEPT;
+    		}
+
+
+  		// define hash & Insert in sender side for RTCP
+		netlink_message_rtcp1->src_ipv4 = htonl(src_ipv4);
+    		netlink_message_rtcp1->dst_ipv4 = htonl(dst_ipv4);
+    		netlink_message_rtcp1->snat_ipv4 = htonl(snat_ipv4);
+    		netlink_message_rtcp1->dnat_ipv4 = htonl(dnat_ipv4);
+    		netlink_message_rtcp1->src_port = rtcp_src_port;
+    		netlink_message_rtcp1->dst_port = rtcp_dst_port;
+    		netlink_message_rtcp1->snat_port = rtcp_snat_port;
+    		netlink_message_rtcp1->dnat_port = rtcp_dnat_port;
+    		netlink_message_rtcp1->timeout = timeout;
+    		netlink_message_rtcp1->callid = callid;
+    		netlink_message_rtcp1->session = session;
+   		// Insert To hash_table with key src_port
+		hash_add_rcu(netlink_message_table, &netlink_message_rtcp1->hash_node, key_rtcp1);
+
+  		// define hash & Insert in receiver side for RTCP
+		netlink_message_rtcp2->src_ipv4 = htonl(dnat_ipv4);
+    		netlink_message_rtcp2->dst_ipv4 = htonl(snat_ipv4);
+    		netlink_message_rtcp2->snat_ipv4 = htonl(dst_ipv4);
+    		netlink_message_rtcp2->dnat_ipv4 = htonl(src_ipv4);
+    		netlink_message_rtcp2->src_port = rtcp_dnat_port;
+    		netlink_message_rtcp2->dst_port = rtcp_snat_port;
+    		netlink_message_rtcp2->snat_port = rtcp_dst_port;
+    		netlink_message_rtcp2->dnat_port = rtcp_src_port;
+    		netlink_message_rtcp2->timeout = timeout;
+    		netlink_message_rtcp2->callid = callid;
+    		netlink_message_rtcp2->session = session;
+   		// Insert To hash_table with key src_port
+		hash_add_rcu(netlink_message_table, &netlink_message_rtcp2->hash_node, key_rtcp2);
+
 
 	}
   

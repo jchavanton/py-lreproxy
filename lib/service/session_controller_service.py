@@ -128,9 +128,8 @@ class SessionControllerService:
         request_id, command = cls.get_request_id_and_command(data)
         call_id = cls.get_call_id(data)
         logger.debug("call_id: %s, date: %s" % (call_id, data))
-        if not CallStatusRequest.exists_call_id(call_id):
-            CallStatusRequest.add(call_id, request_id, add=request_id)
-            UnixSocketClientService.data_request_queue.put(data)
+        CallStatusRequest.add(call_id, request_id, add=request_id)
+        UnixSocketClientService.data_request_queue.put(data)
 
     @classmethod
     def get_call_id(cls, data: bytes = None) -> str:
