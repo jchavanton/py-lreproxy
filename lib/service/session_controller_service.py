@@ -42,9 +42,7 @@ class SessionControllerService:
                         continue
 
                     if cls.add_request_data_queue.qsize() > 100:
-                        logger.warning(
-                            'queue data_request have many waited request len:%s'
-                            % cls.add_request_data_queue.qsize())
+                        logger.warning(f"queue data_request have many waited request len:{cls.add_request_data_queue.qsize()}")
 
                     for req in local_requests:
                         cls.data_request_handler(req)
@@ -53,7 +51,7 @@ class SessionControllerService:
                     local_requests = list()
 
                 except queue.Empty as e:
-                    logger.debug('data_request is Empty ( %s )' % e)
+                    logger.debug(f"data_request is Empty ( {e} )")
         except Exception as e:
             logger.error(e)
             time.sleep(3)
@@ -82,9 +80,7 @@ class SessionControllerService:
                         continue
 
                     if cls.delete_request_data_queue.qsize() > 100:
-                        logger.warning(
-                            'queue data_request have many waited request len:%s'
-                            % cls.delete_request_data_queue.qsize())
+                        logger.warning(f"queue data_request have many waited request len:{cls.delete_request_data_queue.qsize()}")
 
                     for req in local_requests:
                         cls.data_request_handler(req)
@@ -93,7 +89,7 @@ class SessionControllerService:
                     local_requests = list()
 
                 except queue.Empty as e:
-                    logger.debug('data_request is Empty ( %s )' % e)
+                    logger.debug(f"data_request is Empty ( {e} )")
         except Exception as e:
             logger.error(e)
             time.sleep(3)
@@ -101,7 +97,7 @@ class SessionControllerService:
     @classmethod
     def data_request_handler(cls, data: bytes = None) -> None:
         # TODO save call session
-        logger.debug("SessionControllerService ((( Request ))): %s" % data)
+        # logger.debug("SessionControllerService ((( Request ))): %s" % data)
 
         # ------------- Set fake data -------------------
         data = data.decode("utf-8")
@@ -127,9 +123,12 @@ class SessionControllerService:
         # -----------------------------------------------
         request_id, command = cls.get_request_id_and_command(data)
         call_id = cls.get_call_id(data)
-        logger.debug("call_id: %s, date: %s" % (call_id, data))
+        # logger.debug("call_id: %s, date: %s" % (call_id, data))
         CallStatusRequest.add(call_id, request_id, add=request_id)
         UnixSocketClientService.data_request_queue.put(data)
+        # if not CallStatusRequest.exists_call_id(call_id):
+        #     CallStatusRequest.add(call_id, request_id, add=request_id)
+        #     UnixSocketClientService.data_request_queue.put(data)
 
     @classmethod
     def get_call_id(cls, data: bytes = None) -> str:

@@ -14,16 +14,6 @@ class Config:
     # Unix socket
     forward_to = "/root/sock"
 
-    # User space
-    user_space_c_file_path = "/usr/src/py-lreproxy/lib/c/user_space.o/user_space.c"
-    user_space_o_file_path = "/usr/src/py-lreproxy/lib/c/user_space.o/user_space.o"
-
-    # Kernel space
-    kernel_space_directory = "/usr/src/py-lreproxy/lib/c/kernel_space.ko/"
-    kernel_space_make_file_path = "/usr/src/py-lreproxy/lib/c/kernel_space.ko/Makefile"
-    kernel_space_c_file_path = "/usr/src/py-lreproxy/lib/c/kernel_space.ko/lreproxy_module.c"
-    kernel_space_ko_file_path = "/usr/src/py-lreproxy/lib/c/kernel_space.ko/lreproxy_module.ko"
-
     # logger
     # log_level = logging.INFO
     log_level = logging.DEBUG

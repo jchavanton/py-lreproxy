@@ -5,6 +5,7 @@ import os
 import time
 import subprocess
 
+from lib.tools.common_functions import get_user_space_c_file_path, get_user_space_o_file_path
 from logger import logger
 from conf.config import Config
 
@@ -17,6 +18,8 @@ class UnixSocketClientService:
     active = False
     is_run_unix_o = False
     force_connected = True
+    # port_even = 20000
+    # port_odd = 20002
 
     @classmethod
     def run(cls) -> None:
@@ -29,6 +32,24 @@ class UnixSocketClientService:
         t.join(1)
         threading.Thread(target=cls.worker_check_connection, args=(), daemon=True).start()
         threading.Thread(target=cls.consumer_data_request, args=(), daemon=True).start()
+        # threading.Thread(target=cls.send_fake_data, args=(), daemon=True).start()
+
+    # @classmethod
+    # def send_fake_data(cls):
+    #     from lib.service.session_controller_service import SessionControllerService
+    #     time.sleep(3)
+    #     while True:
+    #         data = f"1041_2 S 192.168.122.166 192.168.122.103 192.168.122.103 192.168.122.1" \
+    #                f" 4004 {cls.port_even} {cls.port_odd} 8000 60 615ced9cffca4c1b8a405d3465a5567d zc5MmIxMGY "
+    #         data = data.encode("utf-8")
+    #         SessionControllerService.add_request_data_queue.put(data)
+    #         cls.port_even += 4
+    #         cls.port_odd += 4
+    #         if cls.port_even >= 40000:
+    #             cls.port_even = 20000
+    #             cls.port_odd = 20002
+    #
+    #         time.sleep(0.01)
 
     @classmethod
     def create_unix_file(cls) -> None:
@@ -36,15 +57,15 @@ class UnixSocketClientService:
         if os.path.exists(Config.forward_to):
             os.remove(Config.forward_to)
 
-        if not os.path.exists(Config.user_space_c_file_path):
-            logger.error("%s not found" % Config.user_space_c_file_path)
+        if not os.path.exists(get_user_space_c_file_path()):
+            logger.error("user_space.c not found")
         else:
             try:
-                if os.path.exists("%s" % Config.user_space_o_file_path):
-                    os.remove("%s" % Config.user_space_o_file_path)
+                if os.path.exists(get_user_space_o_file_path()):
+                    os.remove(get_user_space_o_file_path())
 
                 proc = subprocess.Popen(
-                    "gcc %s -lm -o %s" % (Config.user_space_c_file_path, Config.user_space_o_file_path),
+                    f"gcc {get_user_space_c_file_path()} -lm -o {get_user_space_o_file_path()}",
                     shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
@@ -56,52 +77,52 @@ class UnixSocketClientService:
 
                 if stderr:
                     logger.debug(stderr)
-                logger.debug("%s created" % Config.user_space_o_file_path)
+                logger.debug(f"{get_user_space_o_file_path()} created")
 
             except Exception as e:
-                logger.exception("Error: %s" % e)
+                logger.exception(f"Error: {e}")
 
     @classmethod
     def run_user_space(cls) -> None:
 
         while True:
 
-            if os.path.exists("%s" % Config.user_space_o_file_path):
+            if os.path.exists(get_user_space_o_file_path()):
                 try:
 
                     if not cls.is_run_unix_o:
                         logger.debug("Starting user_space.o")
-                        command = Config.user_space_o_file_path
+                        command = os.path.join(get_user_space_o_file_path())
 
                         cls.is_run_unix_o = True
                         cls.force_connected = True
                         proc = subprocess.run(command, stdout=subprocess.PIPE, check=True)
                         return_code = proc.returncode
-                        logger.debug("CODE: %s" % return_code)
+                        logger.debug(f"Code: {return_code}")
                         if return_code != 0:
-                            logger.debug("my code: %s" % return_code)
+                            logger.debug(f"Error code: {return_code}")
                             raise subprocess.CalledProcessError(return_code, command)
                         else:
-                            logger.debug("Successfully %s running" % Config.user_space_o_file_path)
+                            logger.debug(f"Successfully {get_user_space_o_file_path()} running")
 
                         logger.debug("(run_unix_server) end")
                 except subprocess.CalledProcessError as e:
-                    logger.error("(x) Error : %s" % e)
+                    logger.error(f"Error : {e}")
                     cls.is_run_unix_o = False
                     # cls.sock.close()
                     if os.path.exists(Config.forward_to):
                         os.remove(Config.forward_to)
                     time.sleep(1)
                 except OSError as e:
-                    logger.error("OS error: %s" % e)
+                    logger.error(f"OS error: {e}")
                     cls.sock.close()
                     time.sleep(1)
                 except Exception as e:
-                    logger.error("Another error: %s", e)
+                    logger.error(f"Another error: {e}")
                     cls.sock.close()
                     time.sleep(1)
             else:
-                logger.error("%s not found" % Config.user_space_o_file_path)
+                logger.error(f"{get_user_space_o_file_path()} not found")
             time.sleep(5)
 
     @classmethod
@@ -116,9 +137,9 @@ class UnixSocketClientService:
                         cls.force_connected = False
                         logger.debug("Successfully socket connected to server")
                     else:
-                        logger.error("%s not found" % Config.forward_to)
+                        logger.error(f"{Config.forward_to} not found")
             except Exception as e:
-                logger.debug("Error (worker_check_connection): %s" % e)
+                logger.debug(f"Error [worker_check_connection]:{e}")
                 cls.sock.close()
                 # logger.debug("Try again for connect socket")
             time.sleep(3)
@@ -158,7 +179,7 @@ class UnixSocketClientService:
                     local_requests = list()
 
                 except queue.Empty as e:
-                    logger.debug('data_request_queue is Empty ( %s )' % e)
+                    logger.debug(f"data_request_queue is Empty ( {e} )")
         except Exception as e:
             logger.error(e)
             time.sleep(3)
@@ -166,9 +187,9 @@ class UnixSocketClientService:
     @classmethod
     def data_handler(cls, data: bytes = None) -> None:
         try:
-            logger.debug("DATA: UNIX FOR SEND: %s" % data)
+            # logger.debug("DATA: UNIX FOR SEND: %s" % data)
             cls.sock.send(data)
-            logger.debug("Successfully send data to kernel_space: %s" % data)
+            logger.debug(f"Successfully sent data to kernel_space: {data}")
         except Exception as e:
             logger.error(e)
 
